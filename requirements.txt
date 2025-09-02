@@ -1,0 +1,12 @@
+transformers
+torch
+torchvision
+torchaudio
+torchmetrics
+nltk
+rouge-score
+pycocoevalcap
+pyyaml
+tqdm
+pillow
+jupyter

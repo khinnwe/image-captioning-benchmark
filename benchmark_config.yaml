@@ -1,0 +1,47 @@
+# Paths below are examples based on your setup. Adjust as needed.
+datasets:
+  - name: VizWiz
+    path: "D:/New Volume/KNO/models/Data/VizWiz/vizwiz_1000_test.json"
+    image_root: "D:/New Volume/KNO/models/Data/VizWiz"
+  - name: flickr8k
+    path: "D:/New Volume/KNO/models/Data/Flickr8k/flickr8k_1000_test_dataset.json"
+    image_root: "D:/New Volume/KNO/models/Data/Flickr8k/Flicker8k_Dataset"
+  - name: MSCOCO
+    path: "D:/New Volume/KNO/models/Data/MSCOCO/coco_karpathy_1000_test.json"
+    image_root: "D:/New Volume/KNO/models/Data/MSCOCO/testimage"
+
+models:
+  - name: blip_base
+    local_dir: "D:/New Volume/KNO/models/blip-image-captioning-base"
+  - name: blip2_opt_2_7b
+    local_dir: "D:/New Volume/KNO/models/blip2-opt-2.7b"
+    prefer_8bit: true
+  - name: git_large
+    local_dir: "D:/New Volume/KNO/models/git-large"
+  - name: git_large_coco
+    local_dir: "D:/New Volume/KNO/models/git-large-coco"
+  - name: gpt2_large
+    local_dir: "D:/New Volume/KNO/models/gpt2-large"
+  - name: frequency_baseline
+    local_dir: ""
+  - name: nearest_neighbor
+    local_dir: ""
+
+generation:
+  decoding_strategies: [beam, greedy, nucleus]   # order matters; first is default for single decode
+  beam_size: 5
+  nucleus_top_p: 0.9
+  max_new_tokens: 30
+
+rerank:
+  enabled: true
+  num_candidates: 6
+  clip_local_dir: "D:/New Volume/KNO/models/clip-vit-base-patch32"  # used for CLIP reranking
+
+baselines:
+  nn_clip_local_dir: "D:/New Volume/KNO/models/clip-vit-base-patch32"  # used for nearest-neighbor baseline
+
+run:
+  device: "cuda"
+  batch_size: 1
+  # max_samples: 1000   # uncomment to cap test set size

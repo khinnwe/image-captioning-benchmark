@@ -1,0 +1,33 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environments
+.venv/
+venv/
+env/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Results and logs
+results/
+results.json
+results_predictions.json
+
+# Datasets and local models (avoid pushing large files)
+Data/
+data/
+datasets/
+models/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.ckpt
+*.zip
+
+# OS files
+.DS_Store
+Thumbs.db

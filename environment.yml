@@ -1,0 +1,21 @@
+name: image-captioning-benchmark
+channels:
+  - defaults
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - torch
+      - torchvision
+      - torchaudio
+      - transformers
+      - torchmetrics
+      - nltk
+      - rouge-score
+      - pycocoevalcap
+      - pyyaml
+      - tqdm
+      - pillow
+      - jupyter
