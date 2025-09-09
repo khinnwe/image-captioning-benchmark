@@ -1,15 +1,15 @@
-# Paths below are examples based on your setup. Adjust as needed.
+# Paths below are examples based on setup. Adjust as needed. all models are already downloaded.
 datasets:
-  - name: VizWiz
-    path: "D:/New Volume/KNO/models/Data/VizWiz/vizwiz_1000_test.json"
-    image_root: "D:/New Volume/KNO/models/Data/VizWiz"
-  - name: flickr8k
-    path: "D:/New Volume/KNO/models/Data/Flickr8k/flickr8k_1000_test_dataset.json"
-    image_root: "D:/New Volume/KNO/models/Data/Flickr8k/Flicker8k_Dataset"
-  - name: MSCOCO
-    path: "D:/New Volume/KNO/models/Data/MSCOCO/coco_karpathy_1000_test.json"
-    image_root: "D:/New Volume/KNO/models/Data/MSCOCO/testimage"
-
+    - name: flickr8k
+      path: "Data/flickr8k_1000_test_dataset.json"
+      image_root: "D:/New Volume/KNO/models/Data/Flickr8k/Flicker8k_Dataset"
+    - name: MSCOCO
+      path: "Data/coco_karpathy_1000_test.json"
+      image_root: "D:/New Volume/KNO/models/Data/MSCOCO/testimage"
+    
+    - name: VizWiz
+      path: "Data/vizwiz_1000_test.json"
+      image_root: "D:/New Volume/KNO/models/Data/VizWiz"
 models:
   - name: blip_base
     local_dir: "D:/New Volume/KNO/models/blip-image-captioning-base"
@@ -44,4 +44,4 @@ baselines:
 run:
   device: "cuda"
   batch_size: 1
-  # max_samples: 1000   # uncomment to cap test set size
+  max_samples: 1000   # uncomment to cap test set size

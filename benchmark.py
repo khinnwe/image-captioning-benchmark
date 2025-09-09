@@ -364,9 +364,7 @@ def measure_efficiency(fn, *args, device="cuda", **kwargs):
     return out, {"latency": latency, "vram_mb": vram_mb, "throughput": throughput}
 
 
-# ======================
-# Runner
-# ======================
+
 
 def run_benchmark(cfg):
     device = cfg.get("run", {}).get("device", "cuda" if torch.cuda.is_available() else "cpu")
@@ -389,10 +387,15 @@ def run_benchmark(cfg):
 
     results = {}
     predictions_store = {}
+    baseline_models = [
+        {"name": "frequency_baseline"},
+        {"name": "nearest_neighbor_baseline"}
+    ]
+    cfg["models"].extend(baseline_models)
 
     for dataset in cfg.get("datasets", []):
         ds_name = dataset["name"]
-        print(f\"\\n📂 Loading dataset: {ds_name}\")
+        print(f"\n📂 Loading dataset: {ds_name}")
         with open(dataset["path"], "r", encoding="utf-8") as f:
             data = json.load(f)
         image_root = dataset["image_root"]
@@ -418,7 +421,7 @@ def run_benchmark(cfg):
 
         for model_cfg in cfg.get("models", []):
             name = model_cfg["name"]
-            print(f\"\\n🚀 Running {name} on {ds_name} ...\")
+            print(f"\n🚀 Running {name} on {ds_name} ...")
 
             # choose model
             model = None
@@ -446,119 +449,84 @@ def run_benchmark(cfg):
                 print(f"⚠️ Unsupported model name: {name}")
                 continue
 
-            predictions, references, per_sample, img_paths = [], [], [], []
-            eff_logs = []
+            results.setdefault(name, {}).setdefault(ds_name, {})
+            predictions_store.setdefault(name, {}).setdefault(ds_name, {})
 
-            # Prepare reranker if needed
-            reranker = None
-            if enable_rerank and mode == "captioning" and clip_dir_for_rerank:
-                try:
-                    reranker = CLIPReRanker(clip_dir_for_rerank, device=device)
-                except Exception:
-                    reranker = None
+            # loop over decoding strategies
+            strategies_to_run = dec_strategies if mode == "captioning" else ["default"]
 
-            # Iterate samples
-            loop_data = split_test
-            for ex in tqdm(loop_data, desc=f"{name} → {ds_name}"):
-                filename = ex.get("file_path")
-                img_path = os.path.join(image_root, filename) if filename else None
-                if not img_path or not os.path.exists(img_path):
-                    continue
-                refs = [s.get("raw", "") for s in ex.get("sentences", [])]
+            for strategy in strategies_to_run:
+                predictions, references, per_sample, img_paths, eff_logs = [], [], [], [], []
 
-                try:
-                    if mode == "captioning":
-                        # Candidate generation
-                        if reranker is not None and num_candidates > 1:
-                            cands = []
-                            # Round-robin through strategies to get N candidates
-                            strat_cycle = (dec_strategies if len(dec_strategies) else ["greedy"]).copy()
-                            si = 0
-                            while len(cands) < num_candidates:
-                                strat = strat_cycle[si % len(strat_cycle)]
-                                caption = model.generate_one(
-                                    img_path,
-                                    strategy=strat,
-                                    max_new_tokens=max_new_tokens,
-                                    num_beams=num_beams,
-                                    top_p=top_p,
-                                )
-                                cands.append(caption)
-                                si += 1
-                            # Rerank by CLIP image-text score
-                            pred, eff = measure_efficiency(reranker.pick_best, img_path, cands, device=device)
-                        else:
-                            # Single decode (default: beam)
+                print(f"\n   🔹 Strategy: {strategy}")
+
+                for ex in tqdm(split_test, desc=f"{name} ({strategy}) → {ds_name}"):
+                    filename = ex.get("file_path")
+                    img_path = os.path.join(image_root, filename) if filename else None
+                    if not img_path or not os.path.exists(img_path):
+                        continue
+                    refs = [s.get("raw", "") for s in ex.get("sentences", [])]
+
+                    try:
+                        if mode == "captioning":
                             pred, eff = measure_efficiency(
                                 model.generate_one, img_path,
                                 device=device,
-                                strategy=(dec_strategies[0] if dec_strategies else "beam"),
+                                strategy=strategy,
                                 max_new_tokens=max_new_tokens,
                                 num_beams=num_beams,
                                 top_p=top_p,
                             )
-                    else:  # zeroshot classification demo
-                        pred, eff = measure_efficiency(model.classify, img_path, device=device)
-                except torch.cuda.OutOfMemoryError:
-                    torch.cuda.empty_cache()
-                    pred, eff = "ERROR_OOM", {"latency": math.inf, "vram_mb": float('nan'), "throughput": 0.0}
-                except Exception as e:
-                    pred, eff = f"ERROR: {repr(e)}", {"latency": float('nan'), "vram_mb": float('nan'), "throughput": 0.0}
+                        else:  # zeroshot classification demo
+                            pred, eff = measure_efficiency(model.classify, img_path, device=device)
+                    except torch.cuda.OutOfMemoryError:
+                        torch.cuda.empty_cache()
+                        pred, eff = "ERROR_OOM", {"latency": math.inf, "vram_mb": float('nan'), "throughput": 0.0}
+                    except Exception as e:
+                        pred, eff = f"ERROR: {repr(e)}", {"latency": float('nan'), "vram_mb": float('nan'), "throughput": 0.0}
 
-                predictions.append(pred)
-                references.append(refs)
-                img_paths.append(img_path)
-                eff_logs.append(eff)
-                per_sample.append({"file": filename, "prediction": pred, "references": refs, "efficiency": eff})
+                    predictions.append(pred)
+                    references.append(refs)
+                    img_paths.append(img_path)
+                    eff_logs.append(eff)
+                    per_sample.append({"file": filename, "prediction": pred, "references": refs, "efficiency": eff})
 
-            # --- Metrics ---
-            results.setdefault(name, {})[ds_name] = {}
-            if mode == "captioning":
-                bleu = compute_bleu_all(predictions, references)
-                meteor = compute_meteor(predictions, references)
-                rougeL = compute_rougeL(predictions, references)
-                cider = compute_cider(predictions, references)
-                
-                clipscore_ref_free = compute_clipscore_image_text(img_paths, predictions, device=device)  # may be None
+                # --- Metrics ---
+                if mode == "captioning":
+                    bleu = compute_bleu_all(predictions, references)
+                    meteor = compute_meteor(predictions, references)
+                    rougeL = compute_rougeL(predictions, references)
+                    cider = compute_cider(predictions, references)
+                    clipscore_ref_free = compute_clipscore_image_text(img_paths, predictions, device=device)
 
-                results[name][ds_name].update({
-                    **bleu,
-                    "METEOR": meteor,
-                    "ROUGE-L": rougeL,
-                    "CIDEr": cider,
-                    "CLIPScore": clipscore_ref_free,
-                })
+                    results[name][ds_name][strategy] = {
+                        **bleu,
+                        "METEOR": meteor,
+                        "ROUGE-L": rougeL,
+                        "CIDEr": cider,
+                        "CLIPScore": clipscore_ref_free,
+                        "Avg_Latency_s": sum(e["latency"] for e in eff_logs if math.isfinite(e["latency"])) / max(1, len([e for e in eff_logs if math.isfinite(e["latency"])])),
+                        "Avg_VRAM_MB": sum(e["vram_mb"] for e in eff_logs if not math.isnan(e["vram_mb"])) / max(1, len([e for e in eff_logs if not math.isnan(e["vram_mb"])])),
+                        "Avg_Throughput_img_per_s": sum(e["throughput"] for e in eff_logs if e["throughput"] > 0) / max(1, len([e for e in eff_logs if e["throughput"] > 0])),
+                    }
 
-                print(
-                    f"  ✅ BLEU-1 {bleu['BLEU-1']:.4f} | BLEU-2 {bleu['BLEU-2']:.4f} | "
-                    f"BLEU-3 {bleu['BLEU-3']:.4f} | BLEU-4 {bleu['BLEU-4']:.4f} | METEOR {meteor:.4f} | "
-                    f"ROUGE-L {rougeL:.4f} | CIDEr {cider:.4f} | "
-                    f"CLIPScore {('%.4f'%clipscore_ref_free) if clipscore_ref_free is not None else 'n/a'}"
-                )
-            else:
-                # simple accuracy for zeroshot classification if references contain exact text
-                total, correct = 0, 0
-                for p, R in zip(predictions, references):
-                    total += 1
-                    if p.lower() in [r.lower() for r in R]:
-                        correct += 1
-                acc = (correct/total) if total else 0.0
-                results[name][ds_name].update({"Accuracy": acc})
-                print(f"  ✅ Accuracy: {acc:.4f}")
+                    print(
+                        f"  ✅ {strategy} | BLEU-1 {bleu['BLEU-1']:.4f} | BLEU-2 {bleu['BLEU-2']:.4f} | "
+                        f"BLEU-3 {bleu['BLEU-3']:.4f} | BLEU-4 {bleu['BLEU-4']:.4f} | METEOR {meteor:.4f} | "
+                        f"ROUGE-L {rougeL:.4f} | CIDEr {cider:.4f} | "
+                        f"CLIPScore {('%.4f'%clipscore_ref_free) if clipscore_ref_free is not None else 'n/a'}"
+                    )
+                else:
+                    total, correct = 0, 0
+                    for p, R in zip(predictions, references):
+                        total += 1
+                        if p.lower() in [r.lower() for r in R]:
+                            correct += 1
+                    acc = (correct/total) if total else 0.0
+                    results[name][ds_name][strategy] = {"Accuracy": acc}
+                    print(f"  ✅ {strategy} | Accuracy: {acc:.4f}")
 
-            # --- Efficiency summary ---
-            if eff_logs:
-                avg_latency = sum(e["latency"] for e in eff_logs if math.isfinite(e["latency"])) / max(1, sum(1 for e in eff_logs if math.isfinite(e["latency"])) )
-                avg_vram = sum(e["vram_mb"] for e in eff_logs if not math.isnan(e["vram_mb"])) / max(1, sum(1 for e in eff_logs if not math.isnan(e["vram_mb"])) )
-                avg_throughput = sum(e["throughput"] for e in eff_logs if e["throughput"] > 0) / max(1, sum(1 for e in eff_logs if e["throughput"] > 0))
-                results[name][ds_name].update({
-                    "Avg_Latency_s": avg_latency,
-                    "Avg_VRAM_MB": avg_vram,
-                    "Avg_Throughput_img_per_s": avg_throughput,
-                })
-
-            # store predictions
-            predictions_store.setdefault(name, {})[ds_name] = per_sample
+                predictions_store[name][ds_name][strategy] = per_sample
 
     # save
     with open("results.json", "w", encoding="utf-8") as f:
@@ -566,10 +534,9 @@ def run_benchmark(cfg):
     with open("results_predictions.json", "w", encoding="utf-8") as f:
         json.dump(predictions_store, f, indent=2, ensure_ascii=False)
 
-    print("\\n🎉 Benchmark finished!")
+    print("\n🎉 Benchmark finished!")
     print("📄 Summary saved to: results.json")
     print("📄 Predictions saved to: results_predictions.json")
-
 
 # ======================
 # Main
@@ -577,3 +544,4 @@ def run_benchmark(cfg):
 if __name__ == "__main__":
     cfg = load_config("benchmark_config.yaml")
     run_benchmark(cfg)
+        
