@@ -1,24 +1,33 @@
-# Byte-compiled / cache
+# -----------------------------
+# Python Byte-compiled / Cache
+# -----------------------------
 __pycache__/
 *.py[cod]
 *.pyo
 
-# Environments
+# -----------------------------
+# Virtual Environments
+# -----------------------------
 .venv/
 venv/
 env/
 
-# Jupyter checkpoints
+# -----------------------------
+# Jupyter Notebooks
+# -----------------------------
 .ipynb_checkpoints/
 
-# Results and logs
+# -----------------------------
+# Results, Logs, and Outputs
+# -----------------------------
 results/
 results.json
 results_predictions.json
+*.log
 
-# Datasets and local models (avoid pushing large files)
-Data/
-data/
+# -----------------------------
+# Datasets and Large Models
+# -----------------------------
 datasets/
 models/
 *.pt
@@ -28,6 +37,22 @@ models/
 *.ckpt
 *.zip
 
-# OS files
+# -----------------------------
+# Configuration / Secrets
+# -----------------------------
+.env
+
+# -----------------------------
+# OS and Editor Files
+# -----------------------------
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*.idea/
+.vscode/
+
+# -----------------------------
+# Temporary / Misc
+# -----------------------------
+*.tmp
